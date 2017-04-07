@@ -27,7 +27,7 @@ while(True):
     neighbor circles may be falsley detected in addtion to a true one. Too large and some
     circles might be missed).
 
-    param1 = seems to effect circle detection. Keep low for less circles. The lower it is
+    param1 = seems to effect circle detection. Keep high for less circles. The higher it is
     the harder it is to detect a circle
 
     param2 = the accumulator threshold for the circle centers at the detection stage.
@@ -40,7 +40,7 @@ while(True):
     '''
     
     circles = cv2.HoughCircles(imgg,cv2.HOUGH_GRADIENT,1,75,
-                               param1=15,param2=75, minRadius=1,maxRadius=100)
+                               param1=17,param2=75, minRadius=1,maxRadius=100)
     print(circles)
 
     # draws the circles on the frame
