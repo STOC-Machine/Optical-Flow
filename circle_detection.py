@@ -13,7 +13,9 @@ while(True):
     # blurrs and turns frame into single-channel image that can be
     # used as an input for HoughCircles
     img = cv2.medianBlur(frame,5)
-    imgg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # bad at detecting black circles, fix color space (invert?) if we want to detect black
+    # or darker circles
+    imgg = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
     # intakes a 8-bit single-channel image and returns a list of circles
     # of the form [x, y, radius]
     '''cv2.HoughCircles(image, method, dp, minDist, param1, param2, minRadius, maxRadius)
