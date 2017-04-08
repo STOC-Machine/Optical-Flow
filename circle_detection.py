@@ -13,7 +13,7 @@ while(True):
     # blurrs and turns frame into single-channel image that can be
     # used as an input for HoughCircles
     img = cv2.medianBlur(frame,5)
-    imgg = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    imgg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # intakes a 8-bit single-channel image and returns a list of circles
     # of the form [x, y, radius]
     '''cv2.HoughCircles(image, method, dp, minDist, param1, param2, minRadius, maxRadius)
@@ -40,7 +40,7 @@ while(True):
     '''
     
     circles = cv2.HoughCircles(imgg,cv2.HOUGH_GRADIENT,1,75,
-                               param1=17,param2=75, minRadius=1,maxRadius=100)
+                               param1=20,param2=75, minRadius=1,maxRadius=100)
     print(circles)
 
     # draws the circles on the frame
