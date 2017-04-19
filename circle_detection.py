@@ -42,7 +42,7 @@ while(True):
     '''
     
     circles = cv2.HoughCircles(imgg,cv2.HOUGH_GRADIENT,1,75,
-                               param1=20,param2=75, minRadius=1,maxRadius=100)
+                               param1=40,param2=87, minRadius=1,maxRadius=200)
     print(circles)
 
     # draws the circles on the frame
