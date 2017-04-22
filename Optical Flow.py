@@ -55,6 +55,7 @@ class App:
                     
             if self.frame_idx % self.detect_interval == 0:
                 mask = np.zeros_like(frame_gray)
+                
                 mask[:] = 255
                 for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
                     cv2.circle(mask, (x, y), 5, 0, -1)
