@@ -26,7 +26,7 @@ class App:
             vis = frame.copy()
             # make more precise parameters at competition to account for lighting and other variables
             circles = cv2.HoughCircles(frame_gray, cv2.HOUGH_GRADIENT, 1, 75,
-                                       param1=40, param2=87, minRadius=1,maxRadius=500)
+                                       param1=45, param2=87, minRadius=1,maxRadius=300)
             
             if circles is not None:
                 circles = np.uint16(np.around(circles))

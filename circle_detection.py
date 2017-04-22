@@ -33,7 +33,7 @@ while(True):
     the harder it is to detect a circle
 
     param2 = the accumulator threshold for the circle centers at the detection stage.
-    The smaller it is, the more false circles may be dtected. Circle, corresponding to the
+    The smaller it is, the more false circles may be detected. Circle, corresponding to the
     larger accumulator values, will be returned first.
 
     minRadius = minimum circle radius
