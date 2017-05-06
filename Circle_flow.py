@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 import time
-from GridSquares import gridSquare
+import sys
+sys.path.insert(0,'Users\Malcolm\Desktop\GitHub\vision-master\GridSquares')
+
 
 lk_params = dict( winSize  = (15, 15), 
                   maxLevel = 2, 
