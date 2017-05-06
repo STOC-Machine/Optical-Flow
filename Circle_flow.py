@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-from time import clock
+import time
+from GridSquares import gridSquare
 
 lk_params = dict( winSize  = (15, 15), 
                   maxLevel = 2, 
@@ -15,6 +16,7 @@ class App:
         self.track_len = 10
         self.detect_interval = 5
         self.tracks = []
+        self.velocitor = []
         self.cam = cv2.VideoCapture(0)
         self.frame_idx = 0
 
@@ -32,9 +34,11 @@ class App:
                 circles = np.uint16(np.around(circles))
                 if len(self.tracks) > 0:
                     img0, img1 = self.prev_gray, frame_gray
+                    t1 = time.clock()
                     p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1,1,2)
                     p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
                     p0r, st, err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
+                    t2 = time.clock()
                     d = abs(p0-p0r).reshape(-1,2).max(-1)
                     good = d < 1
                     new_tracks = []
@@ -44,16 +48,19 @@ class App:
                         tr.append((x,y))
                         if len(tr) > self.track_len:
                             del tr[0]
+                        if len(self.velocitor) > self.track_len:
+                            del self.velocitor[0]
                         new_tracks.append(tr)
                         cv2.circle(vis, (x,y), 2, (0,255,0), -1)
                     self.tracks = new_tracks
                     cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                     for i in range(len(self.tracks)-1):
+                        self.velocitor.append([(self.tracks[i][1][0]-self.tracks[i][0][0])/(t2-t1), (self.tracks[i][1][1]-self.tracks[i][0][1])/(t2-t1)])
                         cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]), (self.tracks[i][1][0], self.tracks[i][1][1]), (0,255,0),1)
+                    gridSquare.getPosStats(self)
                 if self.frame_idx % self.detect_interval == 0:
                     for i in circles[0,:]:
                         self.tracks.append([(i[0],i[1])])
-                    
                 for i in circles[0, :]:
                     cv2.circle(vis, (i[0],i[1]),i[2], (0,255,0),2)
                     cv2.circle(vis, (i[0],i[1]),2 , (0,0,255),3)
