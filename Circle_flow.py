@@ -1,9 +1,8 @@
 import cv2
 import numpy as np
 import time
-import sys
-sys.path.insert(0,'Users\Malcolm\Desktop\GitHub\vision-master\GridSquares')
-
+import GridSquares
+import math
 
 lk_params = dict( winSize  = (15, 15), 
                   maxLevel = 2, 
@@ -18,13 +17,30 @@ class App:
         self.track_len = 10
         self.detect_interval = 5
         self.tracks = []
+        # speed in pixels/second
         self.velocitor = []
+        # speed in centimeters/second
+        self.velocity = []
         self.cam = cv2.VideoCapture(0)
+        # camera is listed as having an FOV of 60 degrees
+        # DFOV = Diagonal Field of View
+        # Horizontal FOV = 2 * atan(tan(DFOV/2)*cos(atan(9/16)))
+        # Vertical FOV = 2 * atan(tan(DFOV/2)*sin(atan(9/16)))
+        # I am using these values halved so HFOV/2 and VFOV/2
+        # sets the camera resolution to 1280 x 720 p MIGHT NOT WORK FOR ALL CAMERAS
+        # using Logitech 720p webcam
+        self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.DFOV = 60*(math.pi/180)
+        self.HFOV = 2*math.atan(math.tan(self.DFOV/2)*math.cos(math.atan(9/16)))
+        self.VFOV = 2*math.atan(math.tan(self.DFOV/2)*math.sin(math.atan(9/16)))
         self.frame_idx = 0
 
     def run(self):
         while True:
             ret, frame = self.cam.read()
+            # gets square objects from Daniel's code. Using to get height of drone
+            squares = GridSquares.run(frame)
             img = cv2.medianBlur(frame, 5)
             frame_gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
             vis = frame.copy()
@@ -57,9 +73,28 @@ class App:
                     self.tracks = new_tracks
                     cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                     for i in range(len(self.tracks)-1):
-                        self.velocitor.append([(self.tracks[i][1][0]-self.tracks[i][0][0])/(t2-t1), (self.tracks[i][1][1]-self.tracks[i][0][1])/(t2-t1)])
+                        x1=self.tracks[i][1][0]-self.tracks[i][0][0]
+                        y1=self.tracks[i][1][1]-self.tracks[i][0][1]
+                        self.velocitor.append([x1/(t2-t1), y1/(t2-t1)])
                         cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]), (self.tracks[i][1][0], self.tracks[i][1][1]), (0,255,0),1)
-                    gridSquare.getPosStats(self)
+                        #print(self.velocitor[i])
+                    if squares != []:
+                        # first value in squares is the most accurate
+                        # Not fully working, check with David
+                        height = -squares[0].location[2]
+                        # x is the distance from one side of the screen to the other in cm
+                        # y is the distance from the top to the bottom of the screen in cm
+                        # x = 2*height*tan(HFOV/2)
+                        # y = 2*height*tan(VFOV/2)
+                        # vertical FOV = 15.304295 degrees for this camera
+                        # horizaontal FOV = 26.71174 degrees for this camera
+                        x = 2*height*math.tan(self.HFOV)
+                        y = 2*height*math.tan(self.VFOV)
+                        for j in range(len(self.velocitor)-1):
+                            # velocity = (x(cm)/x(pxls))*velocity(pxls/s)
+                            self.velocity.append([self.velocitor[j][0]*(x/1280), self.velocitor[j][1]*(y/720)])
+                            print(self.velocity[j])
+                        
                 if self.frame_idx % self.detect_interval == 0:
                     for i in circles[0,:]:
                         self.tracks.append([(i[0],i[1])])
