@@ -14,13 +14,14 @@ feature_params = dict( maxCorners = 500,
                        blockSize = 7 )
 class App:
     def __init__(self, video_src):
+        """
+        :param video_src: This is the visual input by means of a camera
+        """
         self.track_len = 10
         self.detect_interval = 5
         self.tracks = []
-        # speed in pixels/second
-        self.velocitor = []
-        # speed in centimeters/second
-        self.velocity = []
+        self.velocitor = [] # speed in pixels/second
+        self.velocity = []  # speed in centimeters/second
         self.cam = cv2.VideoCapture(0)
         # camera is listed as having an FOV of 60 degrees
         # DFOV = Diagonal Field of View
@@ -35,16 +36,31 @@ class App:
         self.HFOV = 2*math.atan(math.tan(self.DFOV/2)*math.cos(math.atan(9/16)))
         self.VFOV = 2*math.atan(math.tan(self.DFOV/2)*math.sin(math.atan(9/16)))
         self.frame_idx = 0
+        self.calibration_values = None
+        self.times = []
 
     def run(self):
+        """
+        uses GridSquares to determine height
+        detects circles
+        determines speed of circles across screen
+        converts speed into cm/s
+        displays image and visual aids on circles
+        """
         while True:
             ret, frame = self.cam.read()
-            # gets square objects from Daniel's code. Using to get height of drone
-            squares = GridSquares.run(frame)
+            gridsquares = GridSquares.run(frame)
+            squares = gridsquares[0]
+            matrix = gridsquares[1]
+            if self.calibration_values == None:
+                self.calibration_values = cv2.calibrationMatrixValues(matrix, (1280,720),3,3)
+                self.HFOV = self.calibration_values[0]*(math.pi/180)
+                self.VFOV = self.calibration_values[1]*(math.pi/180)
             img = cv2.medianBlur(frame, 5)
+            t = time.clock()
+            self.times.append(t)
             frame_gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
             vis = frame.copy()
-            # make more precise parameters at competition to account for lighting and other variables
             circles = cv2.HoughCircles(frame_gray, cv2.HOUGH_GRADIENT, 1, 75,
                                        param1=45, param2=87, minRadius=1,maxRadius=300)
             
@@ -73,14 +89,13 @@ class App:
                     self.tracks = new_tracks
                     cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                     for i in range(len(self.tracks)-1):
-                        x1=self.tracks[i][1][0]-self.tracks[i][0][0]
-                        y1=self.tracks[i][1][1]-self.tracks[i][0][1]
-                        self.velocitor.append([x1/(t2-t1), y1/(t2-t1)])
+                        tracklen = len(self.tracks[i])-1
+                        x1=self.tracks[i][tracklen][0]-self.tracks[i][0][0]
+                        y1=self.tracks[i][tracklen][1]-self.tracks[i][0][1]
+                        self.velocitor.append([x1/(self.times[frame_idx-1]-self.times[frame_idx]),y1/(self.times[frame_idx-1]-self.times[frame_idx])])
                         cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]), (self.tracks[i][1][0], self.tracks[i][1][1]), (0,255,0),1)
-                        #print(self.velocitor[i])
+                        print(self.velocitor[i])
                     if squares != []:
-                        # first value in squares is the most accurate
-                        # Not fully working, check with David
                         height = -squares[0].location[2]
                         # x is the distance from one side of the screen to the other in cm
                         # y is the distance from the top to the bottom of the screen in cm
@@ -91,10 +106,8 @@ class App:
                         x = 2*height*math.tan(self.HFOV)
                         y = 2*height*math.tan(self.VFOV)
                         for j in range(len(self.velocitor)-1):
-                            # velocity = (x(cm)/x(pxls))*velocity(pxls/s)
+                            #velocity = (x(cm)/x(pxls))*velocity(pxls/s)
                             self.velocity.append([self.velocitor[j][0]*(x/1280), self.velocitor[j][1]*(y/720)])
-                            print(self.velocity[j])
-                        
                 if self.frame_idx % self.detect_interval == 0:
                     for i in circles[0,:]:
                         self.tracks.append([(i[0],i[1])])
@@ -112,6 +125,9 @@ class App:
                 break
 
 def main():
+    """
+    the main function, runs all code listed above
+    """
     import sys
     try: video_src = sys.argv[1]
     except: video_src = 0
