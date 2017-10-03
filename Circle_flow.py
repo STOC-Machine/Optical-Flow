@@ -1,35 +1,29 @@
+#Logitech 720P HD camera has resolution = (640 x 480)
 import cv2
 import numpy as np
 import time
 import GridSquares
 import math
+from operator import attrgetter
 
-lk_params = dict( winSize  = (15, 15), 
-                  maxLevel = 2, 
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))    
+lk_params = {'winSize': (15, 15), 'maxLevel': 2,
+             'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)}
 
-feature_params = dict( maxCorners = 500, 
-                       qualityLevel = 0.3,
-                       minDistance = 7,
-                       blockSize = 7 )
+feature_params = {'maxCorners': 500, 'qualityLevel': 0.3, 'minDistance': 7, 'blockSize': 7}
+
 class App:
-    def __init__(self, video_src):
-        """
-        :param video_src: This is the visual input by means of a camera
-        """
+    def __init__(self):
         self.track_len = 10
         self.detect_interval = 5
         self.tracks = []
         self.velocitor = [] # speed in pixels/second
         self.velocity = []  # speed in centimeters/second
-        self.cam = cv2.VideoCapture(0)
+        self.cam = cv2.VideoCapture(1)
         # camera is listed as having an FOV of 60 degrees
         # DFOV = Diagonal Field of View
         # Horizontal FOV = 2 * atan(tan(DFOV/2)*cos(atan(9/16)))
         # Vertical FOV = 2 * atan(tan(DFOV/2)*sin(atan(9/16)))
         # I am using these values halved so HFOV/2 and VFOV/2
-        # sets the camera resolution to 1280 x 720 p MIGHT NOT WORK FOR ALL CAMERAS
-        # using Logitech 720p webcam
         self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         self.DFOV = 60*(math.pi/180)
@@ -49,11 +43,10 @@ class App:
         """
         while True:
             ret, frame = self.cam.read()
-            gridsquares = GridSquares.run(frame)
-            squares = gridsquares[0]
-            matrix = gridsquares[1]
-            if self.calibration_values == None:
-                self.calibration_values = cv2.calibrationMatrixValues(matrix, (1280,720),3,3)
+            frame_copy = np.copy(frame)
+            squares = GridSquares.computeFrameSquares(frame_copy)
+            if self.calibration_values is None:
+                self.calibration_values = cv2.calibrationMatrixValues(np.array([[811.75165344, 0., 317.03949866],[0., 811.51686214, 247.65442989],[0., 0., 1.]]), (640, 480), 3,3)
                 self.HFOV = self.calibration_values[0]*(math.pi/180)
                 self.VFOV = self.calibration_values[1]*(math.pi/180)
             img = cv2.medianBlur(frame, 5)
@@ -62,8 +55,7 @@ class App:
             frame_gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
             vis = frame.copy()
             circles = cv2.HoughCircles(frame_gray, cv2.HOUGH_GRADIENT, 1, 75,
-                                       param1=45, param2=87, minRadius=1,maxRadius=300)
-            
+                                       param1=45, param2=87, maxRadius=300,minRadius=1)
             if circles is not None:
                 circles = np.uint16(np.around(circles))
                 if len(self.tracks) > 0:
@@ -92,30 +84,36 @@ class App:
                         tracklen = len(self.tracks[i])-1
                         x1=self.tracks[i][tracklen][0]-self.tracks[i][0][0]
                         y1=self.tracks[i][tracklen][1]-self.tracks[i][0][1]
-                        self.velocitor.append([x1/(self.times[frame_idx-1]-self.times[frame_idx]),y1/(self.times[frame_idx-1]-self.times[frame_idx])])
+                        self.velocitor.append([x1/(self.times[self.frame_idx-1]-self.times[self.frame_idx]),y1/(self.times[self.frame_idx-1]-self.times[self.frame_idx])])
                         cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]), (self.tracks[i][1][0], self.tracks[i][1][1]), (0,255,0),1)
-                        print(self.velocitor[i])
+                        #print(self.velocitor[i])
                     if squares != []:
-                        height = -squares[0].location[2]
+                        for square in squares:
+                            square.getPosStats()
+                        for square1 in squares:
+                            for square2 in squares:
+                                square1.compareSquareNormals(square2,frame_copy)
+                        squares.sort(key=attrgetter("score"),reverse=True)
+                        height = squares[0].getHeight()
+                        print(height)
+
                         # x is the distance from one side of the screen to the other in cm
                         # y is the distance from the top to the bottom of the screen in cm
                         # x = 2*height*tan(HFOV/2)
                         # y = 2*height*tan(VFOV/2)
                         # vertical FOV = 15.304295 degrees for this camera
                         # horizaontal FOV = 26.71174 degrees for this camera
-                        x = 2*height*math.tan(self.HFOV)
-                        y = 2*height*math.tan(self.VFOV)
-                        for j in range(len(self.velocitor)-1):
-                            #velocity = (x(cm)/x(pxls))*velocity(pxls/s)
-                            self.velocity.append([self.velocitor[j][0]*(x/1280), self.velocitor[j][1]*(y/720)])
+                        x = 2 * height * math.tan(self.HFOV)
+                        y = 2 * height * math.tan(self.VFOV)
+                        for j in range(len(self.velocitor) - 1):
+                            # velocity = (x(cm)/x(pxls))*velocity(pxls/s)
+                            self.velocity.append([self.velocitor[j][0] * (x / 640), self.velocitor[j][1] * (y / 480)])
                 if self.frame_idx % self.detect_interval == 0:
                     for i in circles[0,:]:
                         self.tracks.append([(i[0],i[1])])
                 for i in circles[0, :]:
                     cv2.circle(vis, (i[0],i[1]),i[2], (0,255,0),2)
                     cv2.circle(vis, (i[0],i[1]),2 , (0,0,255),3)
-
-
             self.frame_idx += 1
             self.prev_gray = frame_gray
             cv2.imshow('circle tracks', vis)
@@ -128,13 +126,12 @@ def main():
     """
     the main function, runs all code listed above
     """
+    print(1)
     import sys
-    try: video_src = sys.argv[1]
-    except: video_src = 0
     print(__doc__)
-    App(video_src).run()
+    App().run()
     cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     main()
-                    

@@ -137,19 +137,19 @@ def main():
 
 if __name__ == '__main__':
     main()
-                    
-=======
+
+
 import cv2
 import numpy as np
 import time
 import GridSquares
 import math
 
-lk_params = dict( winSize  = (15, 15), 
-                  maxLevel = 2, 
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))    
+lk_params = dict( winSize  = (15, 15),
+                  maxLevel = 2,
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
-feature_params = dict( maxCorners = 500, 
+feature_params = dict( maxCorners = 500,
                        qualityLevel = 0.3,
                        minDistance = 7,
                        blockSize = 7 )
@@ -162,7 +162,7 @@ class App:
         self.velocitor = []
         # speed in centimeters/second
         self.velocity = []
-        self.cam = cv2.VideoCapture(0)#'speed_detection3.mp4' 
+        self.cam = cv2.VideoCapture(0)#'speed_detection3.mp4'
         # camera is listed as having an FOV of 60 degrees
         # DFOV = Diagonal Field of View
         # Horizontal FOV = 2 * atan(tan(DFOV/2)*cos(atan(9/16)))
@@ -246,10 +246,10 @@ class App:
                         self.velocity.append([self.velocitor[j][0]*(x/1280), self.velocitor[j][1]*(y/720)])
                         #if (self.velocity[j][0] > 5):
                         #print(self.velocity[j])
-                        
+
             if self.frame_idx % self.detect_interval == 0:
                 mask = np.zeros_like(frame_gray)
-                
+
                 mask[:] = 255
                 for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
                     cv2.circle(mask, (x, y), 5, 0, -1)
@@ -277,5 +277,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-                    
+
 >>>>>>> 9b94ce6d1670be035b8cdae3299f0f36f977db50
