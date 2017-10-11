@@ -34,7 +34,8 @@ class App:
         self.VFOV = 2*math.atan(math.tan(self.DFOV/2)*math.sin(math.atan(9/16)))
         self.frame_idx = 0
         self.calibration_values = None
-        self.times = []
+        self.times = [0]
+        self.prev_gray = None
 
     def run(self):
         """
@@ -45,6 +46,8 @@ class App:
         displays image and visual aids on circles
         """
         while True:
+            t = time.clock()
+            self.times.append(t)
             ret, frame = self.cam.read()
             frame_copy = np.copy(frame)
             squares = GridSquares.computeFrameSquares(frame_copy)
@@ -57,69 +60,66 @@ class App:
             img = cv2.medianBlur(frame, 5)
             frame_gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
             vis = frame.copy()
-            circles = cv2.HoughCircles(frame_gray, cv2.HOUGH_GRADIENT, 1, 75,
-                                       param1=45, param2=87, maxRadius=300,minRadius=1)
-            if circles is not None:
-                circles = np.uint16(np.around(circles))
-                if len(self.tracks) > 0:
-                    img0, img1 = self.prev_gray, frame_gray
-                    t1 = time.clock()
-                    p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1,1,2)
-                    p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
-                    p0r, st, err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
-                    t2 = time.clock()
-                    self.times.append((t1,t2))
-                    d = abs(p0-p0r).reshape(-1,2).max(-1)
-                    good = d < 1
-                    new_tracks = []
-                    for tr, (x,y), good_flag in zip(self.tracks, p1.reshape(-1,2),good):
-                        if not good_flag:
-                            continue
-                        tr.append((x,y))
-                        if len(tr) > self.track_len:
-                            del tr[0]
-                        if len(self.velocitor) > self.track_len:
-                            del self.velocitor[0]
-                        new_tracks.append(tr)
-                        cv2.circle(vis, (x,y), 2, (0,255,0), -1)
-                    self.tracks = new_tracks
-                    cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
-                    for i in range(len(self.tracks)-1):
-                        trackleangth = len(self.tracks[i])-1
-                        x1=self.tracks[i][trackleangth][0]-self.tracks[i][0][0]
-                        y1=self.tracks[i][trackleangth][1]-self.tracks[i][0][1]
-                        self.velocitor.append([x1 / (self.times[self.frame_idx][1] - self.times[self.frame_idx][0]),
-                                               y1 / (self.times[self.frame_idx][1] - self.times[self.frame_idx][0])])
-                        cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]),
-                                 (self.tracks[i][1][0], self.tracks[i][1][1]), (0, 255, 0), 1)
-                    if squares != []:
-                        for square in squares:
-                            square.getPosStats()
-                        for square1 in squares:
-                            for square2 in squares:
-                                square1.compareSquareNormals(square2,frame_copy)
-                        squares.sort(key=attrgetter("score"),reverse=True)
-                        height = squares[0].getHeight()
+            if len(self.tracks) > 0:
+                img0, img1 = self.prev_gray, frame_gray
+                p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1,1,2)
+                p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
+                d = abs(p0-p1).reshape(-1,2).max(-1)
+                self.velocitor.append([(p0[0][0][0]-p1[0][0][1]) / (self.times[self.frame_idx] - self.times[self.frame_idx - 1]),
+                                        (p0[0][0][1]-p1[0][0][1]) / (self.times[self.frame_idx] - self.times[self.frame_idx - 1])])
+                good = d < 1
+                new_tracks = []
+                for tr, (x,y), good_flag in zip(self.tracks, p1.reshape(-1,2),good):
+                    if not good_flag:
+                        continue
+                    tr.append((x,y))
+                    if len(tr) > self.track_len:
+                        del tr[0]
+                    if len(self.velocitor) > self.track_len:
+                        del self.velocitor[0]
+                    new_tracks.append(tr)
+                    cv2.circle(vis, (x,y), 2, (0,255,0), -1)
+                self.tracks = new_tracks
+                cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
+                for i in range(len(self.tracks)-1):
+                    """
+                    tracklen = len(self.tracks[i])-1
+                    x1=self.tracks[0][i][0]-self.tracks[i][0][0]
+                    y1=self.tracks[i][tracklen][1]-self.tracks[i][0][1]
+                        
+                    self.velocitor.append([x1 / (self.times[self.frame_idx] - self.times[self.frame_idx-1]),
+                                            y1 / (self.times[self.frame_idx] - self.times[self.frame_idx-1])])
+                    """
+                    cv2.line(vis, (self.tracks[i][0][0], self.tracks[i][0][1]),
+                                (self.tracks[i][1][0], self.tracks[i][1][1]), (0, 255, 0), 1)
+                if squares != []:
+                    for square in squares:
+                        square.getPosStats()
+                    for square1 in squares:
+                        for square2 in squares:
+                            square1.compareSquareNormals(square2,frame_copy)
+                    squares.sort(key=attrgetter("score"),reverse=True)
+                    height = squares[0].getHeight()
+                    # x is the distance from one side of the screen to the other in cm
+                    # y is the distance from the top to the bottom of the screen in cm
+                    # x = 2*height*tan(HFOV/2)
+                    # y = 2*height*tan(VFOV/2)
+                    # vertical FOV = 15.304295 degrees for this camera
+                    # horizaontal FOV = 26.71174 degrees for this camera
+                    x = 2 * height * math.tan(self.HFOV)
+                    y = 2 * height * math.tan(self.VFOV)
+                    for j in range(len(self.velocitor) - 1):
+                        # velocity = (x(cm)/x(pxls))*velocity(pxls/s)
+                        self.velocity.append([self.velocitor[j][0] * (x / 640), self.velocitor[j][1] * (y / 480)])
+            if self.frame_idx % self.detect_interval == 0:
+                mask = np.zeros_like(frame_gray)
+                mask[:] = 255
+                circle = cv2.HoughCircles(frame_gray, cv2.HOUGH_GRADIENT, 1, 75,
+                                       param1=45, param2=75, maxRadius=300, minRadius=1)
+                if circle is not None:
+                    for x, y, r in np.float32(circle).reshape(-1,3):
+                        self.tracks.append([(x,y)])
 
-                        # x is the distance from one side of the screen to the other in cm
-                        # y is the distance from the top to the bottom of the screen in cm
-                        # x = 2*height*tan(HFOV/2)
-                        # y = 2*height*tan(VFOV/2)
-                        # vertical FOV = 15.304295 degrees for this camera
-                        # horizaontal FOV = 26.71174 degrees for this camera
-                        x = 2 * height * math.tan(self.HFOV)
-                        y = 2 * height * math.tan(self.VFOV)
-                        for j in range(len(self.velocitor) - 1):
-                            # velocity = (x(cm)/x(pxls))*velocity(pxls/s)
-                            self.velocity.append([self.velocitor[j][0] * (x / 640), self.velocitor[j][1] * (y / 480)])
-                """
-                if self.frame_idx % self.detect_interval == 0:
-                    for i in circles[0,:]:
-                        self.tracks.append([(i[0],i[1])])
-                """
-                for i in circles[0, :]:
-                    cv2.circle(vis, (i[0],i[1]),i[2], (0,255,0),2)
-                    cv2.circle(vis, (i[0],i[1]),2 , (0,0,255),3)
             self.frame_idx += 1
             self.prev_gray = frame_gray
             cv2.imshow('circle tracks', vis)

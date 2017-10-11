@@ -68,7 +68,7 @@ class gridSquare:
 		inliers,rvec,tvec=cv2.solvePnP(objectpoints,tempcorners,CameraMatrix,distortionCoefficients) #Where the magic happens. Turns gets vector from camera to center of square
 		inliers,rvec2,tvec2=cv2.solvePnP(secondObjectCorners,tempcorners,CameraMatrix,distortionCoefficients)
 		inliers,rvec3,tvec3=cv2.solvePnP(thirdObjectCorners,tempcorners,CameraMatrix,distortionCoefficients)
-		print(secondObjectCorners)
+		#print(secondObjectCorners)
 		#print rvec
 		#print rvec2
 		#print rvec3
