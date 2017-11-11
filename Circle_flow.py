@@ -8,6 +8,7 @@ import cv2
 from threading import Thread
 import math
 from operator import attrgetter
+import __init__
 import GridSquares
 
 lk_params = {'winSize': (15, 15), 'maxLevel': 2,
@@ -20,7 +21,7 @@ feature_params = dict( maxCorners = 500,
 
 class WebcamVideoStream:
     def __init__(self,src=0):
-        self.stream = cv2.VideoCapture(src)
+        self.stream = cv2.VideoCapture(0)
         (self.grabbed, self.frame) = self.stream.read()
         self.stopped = False
 
@@ -196,7 +197,7 @@ class OpticalFlow:
         :param cameraMatrix: A matrix containing values of a calibrated camera
         :return: height: The height of the camera
         """
-        height = 0
+        height = 10
         squares,temp = GridSquares.getSquareStats(frame,self.camera_values,self.distortion_coefficients)
         if len(squares) > 0:
             squares[0]
@@ -287,16 +288,21 @@ class OpticalFlow:
                 height = self.getHeight(frame,calibration_values)
                 dimensions = self.getDimensions(height, field_of_views)
                 velocity_list = self.addVelocity(speed_list, dimensions, velocity_list)
+                cv2.polylines(frame, [np.int32(tr) for tr in tracked_points], False, (0, 255, 0))
+                print(tracked_points)
 
             if frame_idx % self.detect_interval == 0:
-                tracked_points = self.addPoints(tracked_points,grayed_frame)
+                for x, y in [np.int32(tr[-1]) for tr in tracked_points]:
+                    cv2.circle(frame, (x, y), 5, 0, -1)
+                #tracked_points = self.addPoints(tracked_points,grayed_frame)
                 circles = cv2.HoughCircles(grayed_frame, cv2.HOUGH_GRADIENT, dp=1, minDist=75,
-                                           param1=45, param2=75, maxRadius=300, minRadius=1)
+                                           param1=45, param2=100, maxRadius=300, minRadius=0)
 
                 if circles is not None:
                     for i in circles:
                         for j in i:
                             cv2.circle(frame,(j[0],j[1]),j[2],(0,0,0),5,8,0)
+
                 self.addCircles(tracked_points, circles)
 
             if frame_idx % self.fps_interval == 0:
