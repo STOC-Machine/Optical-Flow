@@ -16,10 +16,12 @@ ESC - exit
 
 # Python 2/3 compatibility
 from __future__ import print_function
-
+from imutils.video import FPS
+import datetime
+import time
 import numpy as np
 import cv2
-from time import clock
+from threading import Thread
 
 lk_params = dict( winSize  = (15, 15),
                   maxLevel = 2,
@@ -28,31 +30,67 @@ lk_params = dict( winSize  = (15, 15),
 feature_params = dict( maxCorners = 500,
                        qualityLevel = 0.3,
                        minDistance = 7,
+
                        blockSize = 7 )
 
+class WebcamVideoStream:
+    def __init__(self,src=0):
+        self.stream = cv2.VideoCapture(src)
+        (self.grabbed, self.frame) = self.stream.read()
+        self.stopped = False
+
+    def start(self):
+        Thread(target=self.update, args=()).start()
+        return self
+
+    def update(self):
+        while True:
+            if self.stopped:
+                return
+
+            (self.grabbed, self.frame) = self.stream.read()
+
+    def read(self):
+        return self.frame
+
+    def stop(self):
+        self.stopped = True
+
 class App:
-    def __init__(self, video_src):
+    def __init__(self):
         self.track_len = 10
         self.detect_interval = 5
+        self.fps_interval = 5
         self.tracks = []
-        self.cam = cv2.VideoCapture(0)
         self.frame_idx = 0
+        self.vlist = []
+
 
     def run(self):
+        #cam = cv2.VideoCapture("ball.avi")
+        vs = WebcamVideoStream(src=0).start()
+        fps = 30
+        t1 = time.clock()
         while True:
-            _ret, frame = self.cam.read()
+            frame = vs.read()
             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             vis = frame.copy()
 
             if len(self.tracks) > 0:
+
                 img0, img1 = self.prev_gray, frame_gray
+                print(img0)
                 p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1, 1, 2)
                 p1, _st, _err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
                 p0r, _st, _err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
+                for i in range(len(p0)):
+                    v = ((p1[i][0][0]-p0[i][0][0])* (fps),
+                         (p1[i][0][1]-p0[i][0][1])*(fps))
+                    self.vlist.append(v)
                 d = abs(p0-p0r).reshape(-1, 2).max(-1)
                 good = d < 1
-                print(good)
                 new_tracks = []
+
                 for tr, (x, y), good_flag in zip(self.tracks, p1.reshape(-1, 2), good):
                     if not good_flag:
                         continue
@@ -65,8 +103,15 @@ class App:
                 cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                 #draw_str(vis, (20, 20), 'track count: %d' % len(self.tracks))
 
+            if self.frame_idx % self.fps_interval == 0:
+                t2 = time.clock()
+                fps = self.fps_interval/(t2-t1)
+                print(fps)
+                t1 = t2
+
             if self.frame_idx % self.detect_interval == 0:
                 mask = np.zeros_like(frame_gray)
+                del self.vlist[:]
                 mask[:] = 255
                 for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
                     cv2.circle(mask, (x, y), 5, 0, -1)
@@ -79,9 +124,13 @@ class App:
             self.frame_idx += 1
             self.prev_gray = frame_gray
             cv2.imshow('lk_track', vis)
+            cv2.waitKey(1)
 
-            ch = cv2.waitKey(1)
+            ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
+                print(self.vlist)
+                cv2.destroyAllWindows()
+                vs.stop()
                 break
 
 def main():
@@ -92,7 +141,7 @@ def main():
         video_src = 0
 
     print(__doc__)
-    App(video_src).run()
+    App().run()
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':

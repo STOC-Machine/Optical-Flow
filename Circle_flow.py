@@ -1,37 +1,58 @@
 # Logitech 720P HD camera has resolution = (640 x 480)
-import math
+from __future__ import print_function
+from imutils.video import FPS
+import datetime
 import time
-from operator import attrgetter
-
-import cv2
 import numpy as np
-
+import cv2
+from threading import Thread
+import math
+from operator import attrgetter
 import GridSquares
 
 lk_params = {'winSize': (15, 15), 'maxLevel': 2,
              'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)}
 
+feature_params = dict( maxCorners = 500,
+                       qualityLevel = 0.3,
+                       minDistance = 7,
+                       blockSize = 7 )
+
+class WebcamVideoStream:
+    def __init__(self,src=0):
+        self.stream = cv2.VideoCapture(src)
+        (self.grabbed, self.frame) = self.stream.read()
+        self.stopped = False
+
+    def start(self):
+        Thread(target=self.update, args=()).start()
+        return self
+
+    def update(self):
+        while True:
+            if self.stopped:
+                return
+
+            (self.grabbed, self.frame) = self.stream.read()
+
+    def read(self):
+        return self.frame
+
+    def stop(self):
+        self.stopped = True
 
 class OpticalFlow:
     def __init__(self):
         self.track_len = 10
         self.detect_interval = 5
+        self.fps_interval = 5
         self.camera_values = np.array(
             [[376.60631072, 0., 334.94985263], [0., 376.37590044, 245.47987032], [0., 0., 1.]])
         self.distortion_coefficients = np.array([-3.30211385e-01, 1.58724644e-01, -1.87573090e-04, 4.55691783e-04,
                                                  -4.98096761e-02])
         self.camera_resolution = (640, 480)
         self.matrix_size = (3, 3)
-
-    def addTime(self, time_list):
-        """
-        takes the time and adds it to the time list
-        :param time_list: a list where the times that different frames were taken at will be stored
-        :return: time_list
-        """
-        t = time.clock()
-        time_list.append(t)
-        return time_list
+        self.fps = 14
 
     def setFrameWidthAndHeight(self, cam):
         """
@@ -48,7 +69,7 @@ class OpticalFlow:
         :param cam: a camera object
         :return: frame: a single frame from the camera object
         """
-        ret, frame = cam.read()
+        frame = cam.read()
         return frame
 
     def undistortFrame(self, frame):
@@ -69,14 +90,6 @@ class OpticalFlow:
         blurred_frame = cv2.medianBlur(frame, 5)
         grayed_frame = cv2.cvtColor(blurred_frame, cv2.COLOR_BGRA2GRAY)
         return grayed_frame
-
-    def getSquares(self, frame):
-        """
-        :param frame: a 3-channel image pulled from a webcam
-        :return: squares: a list of square objects
-        """
-        squares = GridSquares.computeFrameSquares(frame)
-        return squares
 
     def setCalibartionValues(self):
         """
@@ -109,20 +122,19 @@ class OpticalFlow:
                  point1: a point representing the center of the same circle as point0 but in frame1
         """
         point0 = np.float32([tr[-1] for tr in tracked_points]).reshape(-1, 1, 2)
-        point1, st, err = cv2.calcOpticalFlowPyrLK(frame0, frame1, point0, None, **lk_params)
-        return point0, point1
+        point1, _st, _err = cv2.calcOpticalFlowPyrLK(frame0, frame1, point0, None, **lk_params)
+        return (point0, point1)
 
-    def addSpeed(self, point0, point1, time1, time2, speed_list):
+    def addSpeed(self, point0, point1, speed_list, fps):
         """
         :param point0: a point representing a circle
         :param point1: a point representing the same circle in a different location
-        :param time1: the time that point0 was taken at
-        :param time2: the time that point1 was taken at
         :param speed_list: a list holding the speed at which the object moved between the two frames in pxls/s
+        :param fps: the frames per second of the camera
         :return: speed_list
         """
-        speed = [(point0[0][0][0] - point1[0][0][1]) / (time1 - time2),
-                 (point0[0][0][1] - point1[0][0][1]) / (time1 - time2)]
+        speed = [(point0[0][0][0] - point1[0][0][1]) / fps,
+                 (point0[0][0][1] - point1[0][0][1]) / fps]
         speed_list.append(speed)
         return speed_list
 
@@ -168,24 +180,26 @@ class OpticalFlow:
         :param frame: A 3-channel image pulled from a webcam
         :return: squares
         """
-        if squares != []:
-            for square in squares:
-                square.getPosStats()
-            for square1 in squares:
-                for square2 in squares:
-                    square1.compareSquareNormals(square2, frame)
-            squares.sort(key=attrgetter("score"), reverse=True)
+        #if squares != []:
+        for square in squares:
+            square.getPosStats()
+        for square1 in squares:
+            for square2 in squares:
+                square1.compareSquareNormals(square2, frame)
+        squares.sort(key=attrgetter("score"), reverse=True)
         return squares
 
-    def getGoodHeight(self, squares):
+    def getHeight(self, frame, cameraMatrix):
         """
         Takes an array of square objects and returns the height of the first square in the array
-        :param squares: An array of square objects
+        :param frame: A 4-channel image pulled from a webcam
+        :param cameraMatrix: A matrix containing values of a calibrated camera
         :return: height: The height of the camera
         """
         height = 0
-        if squares != []:
-            height = squares[0].getHeight()
+        squares,temp = GridSquares.getSquareStats(frame,self.camera_values,self.distortion_coefficients)
+        if len(squares) > 0:
+            squares[0]
         return height
 
     def getDimensions(self, height, field_of_views):
@@ -222,45 +236,85 @@ class OpticalFlow:
             for x, y, r in np.float32(circles).reshape(-1, 3):
                 tracked_points.append([(x, y)])
 
-    def run(self, cam):
+    def addPoints(self, tracked_points, grayed_frame):
+        """
+        Tracks interesting points instead of circles.
+        Interesting points would be points of high contrast or sharp lines
+        :param tracked_points: A list of tracked points
+        :param grayed_frame: A single channel grayscaled image
+        :return:
+        """
+        mask = np.zeros_like(grayed_frame)
+        mask[:] = 255
+        p = cv2.goodFeaturesToTrack(grayed_frame, mask=mask, **feature_params)
+        if p is not None:
+            for x, y in np.float32(p).reshape(-1, 2):
+                tracked_points.append([(x, y)])
+        return tracked_points
+
+    def getTime(self):
+        t = time.clock()
+        return t
+
+    def getFPS(self,t1,t2):
+        fps = self.fps_interval/(t2-t1)
+        return fps
+
+
+    def run(self):
+        cam = WebcamVideoStream(src=0).start()
         tracked_points = []
         speed_list = []
         velocity_list = []
-        time_list = []
         frame_idx = 0
-        cam = self.setFrameWidthAndHeight(cam)
+        fps = 20
+        t1 = self.getTime()
         calibration_values = self.setCalibartionValues()
         field_of_views = self.setFieldOfView(calibration_values)
         prev_grayed_frame = None
         while True:
-            time_list = self.addTime(time_list)
             frame = self.getFrame(cam)
-            squares = self.getSquares(frame)
-            undistorted_frame = self.undistortFrame(frame)
-            grayed_frame = self.prepFrame(undistorted_frame)
-            if frame_idx % self.detect_interval == 0:
-                circles = cv2.HoughCircles(grayed_frame, cv2.HOUGH_GRADIENT, 1, 75,
-                                           param1=45, param2=75, maxRadius=300, minRadius=1)
-                self.addCircles(tracked_points, circles)
+            grayed_frame = self.prepFrame(frame)
 
             if len(tracked_points) > 0:
                 frame0, frame1 = prev_grayed_frame, grayed_frame
                 point0, point1 = self.getPoints(tracked_points, frame0, frame1)
-                speed_list = self.addSpeed(point0, point1, time_list[frame_idx], time_list[frame_idx - 1], speed_list)
+                speed_list = self.addSpeed(point0, point1, speed_list, fps)
                 good = self.checkDistance(point0, point1)
                 new_tracked_points = self.addGoodTracks(tracked_points, point1.reshape(-1, 2), good)
                 self.keepTracksSmall(tracked_points)
                 tracked_points = new_tracked_points
-                squares = self.sortSquares(squares, frame)
-                height = self.getGoodHeight(squares)
+                height = self.getHeight(frame,calibration_values)
                 dimensions = self.getDimensions(height, field_of_views)
                 velocity_list = self.addVelocity(speed_list, dimensions, velocity_list)
+
+            if frame_idx % self.detect_interval == 0:
+                tracked_points = self.addPoints(tracked_points,grayed_frame)
+                circles = cv2.HoughCircles(grayed_frame, cv2.HOUGH_GRADIENT, dp=1, minDist=75,
+                                           param1=45, param2=75, maxRadius=300, minRadius=1)
+
+                if circles is not None:
+                    for i in circles:
+                        for j in i:
+                            cv2.circle(frame,(j[0],j[1]),j[2],(0,0,0),5,8,0)
+                self.addCircles(tracked_points, circles)
+
+            if frame_idx % self.fps_interval == 0:
+                t2 = self.getTime()
+                fps = self.getFPS(t1,t2)
+                print(fps)
+                t1 = t2
+
             prev_grayed_frame = grayed_frame
             frame_idx += 1
             cv2.imshow('circle tracks', frame)
+            cv2.waitKey(1)
 
             ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
+                print(velocity_list)
+                cv2.destroyAllWindows()
+                cam.stop()
                 break
 
 
@@ -268,10 +322,8 @@ def main():
     """
     the main function, runs all code listed above
     """
-    print(__doc__)
-    cam = cv2.VideoCapture(0)
     opticalflow = OpticalFlow()
-    opticalflow.run(cam)
+    opticalflow.run()
     cv2.destroyAllWindows()
 
 
