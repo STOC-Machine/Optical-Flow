@@ -68,7 +68,7 @@ class App:
 
     def run(self):
         #cam = cv2.VideoCapture("ball.avi")
-        vs = WebcamVideoStream(src=0).start()
+        vs = WebcamVideoStream(src="ball.avi").start()
         fps = 30
         t1 = time.clock()
         while True:
@@ -79,7 +79,6 @@ class App:
             if len(self.tracks) > 0:
 
                 img0, img1 = self.prev_gray, frame_gray
-                print(img0)
                 p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1, 1, 2)
                 p1, _st, _err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
                 p0r, _st, _err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
@@ -103,6 +102,7 @@ class App:
                 cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                 #draw_str(vis, (20, 20), 'track count: %d' % len(self.tracks))
 
+            # gets new fps every fps interval
             if self.frame_idx % self.fps_interval == 0:
                 t2 = time.clock()
                 fps = self.fps_interval/(t2-t1)
