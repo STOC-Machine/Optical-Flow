@@ -198,9 +198,11 @@ class OpticalFlow:
         :return: height: The height of the camera
         """
         height = 10
+        """
         squares,temp = GridSquares.getSquareStats(frame,self.camera_values,self.distortion_coefficients)
         if len(squares) > 0:
             squares[0]
+        """
         return height
 
     def getDimensions(self, height, field_of_views):
@@ -262,8 +264,8 @@ class OpticalFlow:
         return fps
 
 
-    def run(self):
-        cam = WebcamVideoStream(src=0).start()
+    def run(self,src, wantCircles):
+        cam = WebcamVideoStream(src=src).start()
         tracked_points = []
         speed_list = []
         velocity_list = []
@@ -289,26 +291,26 @@ class OpticalFlow:
                 dimensions = self.getDimensions(height, field_of_views)
                 velocity_list = self.addVelocity(speed_list, dimensions, velocity_list)
                 cv2.polylines(frame, [np.int32(tr) for tr in tracked_points], False, (0, 255, 0))
-                print(tracked_points)
 
             if frame_idx % self.detect_interval == 0:
                 for x, y in [np.int32(tr[-1]) for tr in tracked_points]:
                     cv2.circle(frame, (x, y), 5, 0, -1)
-                #tracked_points = self.addPoints(tracked_points,grayed_frame)
-                circles = cv2.HoughCircles(grayed_frame, cv2.HOUGH_GRADIENT, dp=1, minDist=75,
-                                           param1=45, param2=100, maxRadius=300, minRadius=0)
+                if wantCircles:
+                    circles = cv2.HoughCircles(grayed_frame, cv2.HOUGH_GRADIENT, dp=1, minDist=75,
+                                            param1=45, param2=100, maxRadius=300, minRadius=0)
 
-                if circles is not None:
-                    for i in circles:
-                        for j in i:
-                            cv2.circle(frame,(j[0],j[1]),j[2],(0,0,0),5,8,0)
+                    if circles is not None:
+                        for i in circles:
+                            for j in i:
+                                cv2.circle(frame,(j[0],j[1]),j[2],(0,0,0),5,8,0)
 
-                self.addCircles(tracked_points, circles)
+                    self.addCircles(tracked_points, circles)
+                else:
+                    tracked_points = self.addPoints(tracked_points, grayed_frame)
 
             if frame_idx % self.fps_interval == 0:
                 t2 = self.getTime()
                 fps = self.getFPS(t1,t2)
-                print(fps)
                 t1 = t2
 
             prev_grayed_frame = grayed_frame
@@ -328,8 +330,14 @@ def main():
     """
     the main function, runs all code listed above
     """
+    cam = input("Enter the int representation of your camera (default should be 0): ")
+    circles = input("Do you want to track circles (y/n): ")
+    if circles == "y":
+        wantCircles = True
+    else:
+        wantCircles = False
     opticalflow = OpticalFlow()
-    opticalflow.run()
+    opticalflow.run(cam, wantCircles)
     cv2.destroyAllWindows()
 
 
