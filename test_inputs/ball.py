@@ -2,6 +2,10 @@ import pygame
 import sys
 
 def main():
+    """
+    A simple pygame program that creates a box and moves it across the screen
+    Created to test optical flow tracking capabilites given known speed
+    """
     pygame.init()
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((960,720))

@@ -1,5 +1,20 @@
 # STOC-Machine-projects
-# This is optical flow code that will allow a drone to navigate through a space
-# The drone will need to be able to detect rumbas so the sepcifics of the code allows for circle detection
-# This was made for the St. Olaf Carleton Engineering Team 
-Most up-to-date version of code is Circle_flow.py. It does not currently incorporate height detection and, as a result, real-world speed detection so velocity values are given in pixels/second. More testing needs to be done to decrease error in velocity results. Currently, real-world velocity detection would be dependent on two things; the accuracy of height detection software and physical specifications of the camrea. Physical specifications of the camera affect the FOV of the camera and thus the ratio of pixels to a given meter (height also affects this). Thus, for testing, this optical flow program should be limited to pixels/second to keep the testing in as a controlled environment as possible. 
+# Description
+This code was written to work in tandem with other St. Olaf/Carleton Engineering Team projects.
+The final goal of this project is to run this code on a drone in order to aid in autonomous movement.
+Calculates speed of objects using OpenCV's optical flow library and point detection functions.
+Eventually will be used in tandem with neural networks to track the speed of roombas.
+# Usage
+Currently code operates on its own but will ideally work with neural networks and height detection in order to
+output velocity of roomba movement in m/s.
+# Files/Folders
+test_inputs: contains all inputs and input creators that will be used to test optical flow and circle detection.
+
+circle_detection.py: detects circles using OpenCV's HoughCircles function
+
+GridSquares.py: I couldn't figure out how to call code from another GitHub repository so I copied this code: https://github.com/STOC-Machine/vision.
+This code outputs the height of the camera above a grid.
+
+*** RUN THIS CODE TO GET OPTICAL FLOW DATA ***
+optical_flow.py: Uses Lucas-Kanade method of optical flow to calculate the speed of objects moving across the screen. Currently
+returns velocities in pixels/second. Ru

@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-# This function detects circles 
+# This program detects circles using OpenCV's HoughCircles function
 cv2.namedWindow("Circle Detection")
 # initializes camera 
 cam = cv2.VideoCapture(0)
@@ -18,29 +18,6 @@ while(True):
     imgg = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
     # intakes a 8-bit single-channel image and returns a list of circles
     # of the form [x, y, radius]
-    '''cv2.HoughCircles(image, method, dp, minDist, param1, param2, minRadius, maxRadius)
-    image = 8-bit, single channel, grayscale input image
-    
-    method = Detection method. Currently only cv2.HOUGH_GRADIENT exists
-    
-    dp = Inverse ratio of accumulator resolution to image resolution (camera specific)
-
-    minDist = minimum distance between centers of circles (if too small, multiple
-    neighbor circles may be falsley detected in addtion to a true one. Too large and some
-    circles might be missed).
-
-    param1 = seems to effect circle detection. Keep high for less circles. The higher it is
-    the harder it is to detect a circle
-
-    param2 = the accumulator threshold for the circle centers at the detection stage.
-    The smaller it is, the more false circles may be detected. Circle, corresponding to the
-    larger accumulator values, will be returned first.
-
-    minRadius = minimum circle radius
-
-    maxRadius = maximum cricle radius
-    '''
-    
     circles = cv2.HoughCircles(imgg,cv2.HOUGH_GRADIENT,1,75,
                                param1=40,param2=87, minRadius=1,maxRadius=400)
     
