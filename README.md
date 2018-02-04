@@ -17,4 +17,5 @@ This code outputs the height of the camera above a grid.
 
 *** RUN THIS CODE TO GET OPTICAL FLOW DATA ***
 optical_flow.py: Uses Lucas-Kanade method of optical flow to calculate the speed of objects moving across the screen. Currently
-returns velocities in pixels/second. Ru
+returns velocities in pixels/second.
+
